@@ -15,3 +15,6 @@ Thumbs.db
 
 # Netlify
 .netlify/
+
+# Credentials
+credentials.md
