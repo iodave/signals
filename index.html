@@ -388,6 +388,11 @@
             flex-wrap: wrap;
         }
 
+        .status-with-action > div {
+            display: flex;
+            gap: 0.5rem;
+        }
+
         .twitter-btn {
             display: inline-flex;
             align-items: center;
@@ -405,6 +410,25 @@
 
         .twitter-btn:hover {
             background: #1a8cd8;
+        }
+
+        .bluesky-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem 1rem;
+            background: #0085ff;
+            color: white;
+            border-radius: 9999px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background 0.2s ease;
+        }
+
+        .bluesky-btn:hover {
+            background: #0070dd;
         }
 
         /* Inline row layout */
@@ -1154,14 +1178,21 @@
             status.className = `status show ${type}`;
         }
 
-        // Show status with Twitter button
-        function showStatusWithTwitter(message, tweetUrl) {
+        // Show status with social sharing buttons
+        function showStatusWithSocialButtons(message, text) {
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            const blueskyUrl = `https://bsky.app/intent/compose?text=${encodeURIComponent(text)}`;
             status.innerHTML = `
                 <div class="status-with-action">
                     <span>${message}</span>
-                    <a href="${tweetUrl}" target="_blank" rel="noopener noreferrer" class="twitter-btn">
-                        Post to Twitter →
-                    </a>
+                    <div>
+                        <a href="${twitterUrl}" target="_blank" rel="noopener noreferrer" class="twitter-btn">
+                            Twitter →
+                        </a>
+                        <a href="${blueskyUrl}" target="_blank" rel="noopener noreferrer" class="bluesky-btn">
+                            Bluesky →
+                        </a>
+                    </div>
                 </div>
             `;
             status.className = 'status show success';
@@ -1253,10 +1284,9 @@ draft: ${draft.checked}
                     authToken
                 );
 
-                // Show success with Twitter link if in tweet mode
+                // Show success with social sharing buttons if in tweet mode
                 if (mode === 'tweet') {
-                    const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText.value)}`;
-                    showStatusWithTwitter('Committed to GitHub!', tweetUrl);
+                    showStatusWithSocialButtons('Committed to GitHub!', tweetText.value);
                 } else {
                     showStatus('Published successfully!', 'success');
                 }
