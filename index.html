@@ -380,6 +380,33 @@
             color: var(--error);
         }
 
+        .status-with-action {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .twitter-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem 1rem;
+            background: #1d9bf0;
+            color: white;
+            border-radius: 9999px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background 0.2s ease;
+        }
+
+        .twitter-btn:hover {
+            background: #1a8cd8;
+        }
+
         /* Inline row layout */
         .field-row {
             display: flex;
@@ -1127,6 +1154,19 @@
             status.className = `status show ${type}`;
         }
 
+        // Show status with Twitter button
+        function showStatusWithTwitter(message, tweetUrl) {
+            status.innerHTML = `
+                <div class="status-with-action">
+                    <span>${message}</span>
+                    <a href="${tweetUrl}" target="_blank" rel="noopener noreferrer" class="twitter-btn">
+                        Post to Twitter →
+                    </a>
+                </div>
+            `;
+            status.className = 'status show success';
+        }
+
         // Form submit
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1213,13 +1253,13 @@ draft: ${draft.checked}
                     authToken
                 );
 
-                // Open Twitter intent if in tweet mode
+                // Show success with Twitter link if in tweet mode
                 if (mode === 'tweet') {
                     const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText.value)}`;
-                    window.open(tweetUrl, '_blank');
+                    showStatusWithTwitter('Committed to GitHub!', tweetUrl);
+                } else {
+                    showStatus('Published successfully!', 'success');
                 }
-
-                showStatus('Published successfully!', 'success');
 
                 // Reset form (but keep settings)
                 tweetText.value = '';
