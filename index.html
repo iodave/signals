@@ -507,6 +507,16 @@
             color: var(--text-muted);
             margin-top: 0.375rem;
         }
+
+        /* Custom path input */
+        .custom-path-input {
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .custom-path-input.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -603,13 +613,19 @@
                         <p class="helper auth-required-note" id="repoHelper">Sign in with GitHub to see your repositories</p>
                     </div>
                     <div class="field">
-                        <label for="folderPath">Folder Path</label>
-                        <input type="text" id="folderPath" placeholder="content/posts">
+                        <label for="folderPathSelect">Folder Path</label>
+                        <select id="folderPathSelect" disabled>
+                            <option value="">Select a repository first</option>
+                        </select>
+                        <input type="text" id="folderPathCustom" class="custom-path-input" placeholder="Enter custom path, e.g. content/posts">
                         <p class="helper">Path where markdown files will be saved</p>
                     </div>
                     <div class="field">
-                        <label for="imageFolderPath">Image Folder Path</label>
-                        <input type="text" id="imageFolderPath" placeholder="static/images">
+                        <label for="imageFolderPathSelect">Image Folder Path</label>
+                        <select id="imageFolderPathSelect" disabled>
+                            <option value="">Select a repository first</option>
+                        </select>
+                        <input type="text" id="imageFolderPathCustom" class="custom-path-input" placeholder="Enter custom path, e.g. static/images">
                         <p class="helper">Path where images will be uploaded</p>
                     </div>
                 </div>
@@ -632,6 +648,7 @@
         let authToken = null;
         let currentUser = null;
         let repos = [];
+        let folders = [];
 
         // Elements
         const form = document.getElementById('publishForm');
@@ -660,28 +677,42 @@
         const repoHelper = document.getElementById('repoHelper');
 
         // Settings inputs
-        const folderPath = document.getElementById('folderPath');
-        const imageFolderPath = document.getElementById('imageFolderPath');
+        const folderPathSelect = document.getElementById('folderPathSelect');
+        const folderPathCustom = document.getElementById('folderPathCustom');
+        const imageFolderPathSelect = document.getElementById('imageFolderPathSelect');
+        const imageFolderPathCustom = document.getElementById('imageFolderPathCustom');
 
         // Load settings from localStorage
         function loadSettings() {
-            folderPath.value = localStorage.getItem('gh_folder') || '';
-            imageFolderPath.value = localStorage.getItem('gh_image_folder') || '';
             authToken = localStorage.getItem('gh_token') || null;
-
-            const savedRepo = localStorage.getItem('gh_selected_repo');
-            if (savedRepo) {
-                repoSelect.value = savedRepo;
-            }
+            // Folder paths will be restored after folders are loaded
         }
 
         // Save settings to localStorage
         function saveSettings() {
-            localStorage.setItem('gh_folder', folderPath.value);
-            localStorage.setItem('gh_image_folder', imageFolderPath.value);
+            const folder = getFolderPath();
+            const imageFolder = getImageFolderPath();
+            localStorage.setItem('gh_folder', folder);
+            localStorage.setItem('gh_image_folder', imageFolder);
             if (repoSelect.value) {
                 localStorage.setItem('gh_selected_repo', repoSelect.value);
             }
+        }
+
+        // Get the actual folder path (from dropdown or custom input)
+        function getFolderPath() {
+            if (folderPathSelect.value === '__custom__') {
+                return folderPathCustom.value;
+            }
+            return folderPathSelect.value;
+        }
+
+        // Get the actual image folder path (from dropdown or custom input)
+        function getImageFolderPath() {
+            if (imageFolderPathSelect.value === '__custom__') {
+                return imageFolderPathCustom.value;
+            }
+            return imageFolderPathSelect.value;
         }
 
         // OAuth: Redirect to GitHub
@@ -788,10 +819,128 @@
                 repoSelect.innerHTML = '<option value="">Select a repository...</option>' +
                     repos.map(repo => `<option value="${repo.full_name}" ${repo.full_name === savedRepo ? 'selected' : ''}>${repo.full_name}</option>`).join('');
 
+                // If there's a saved repo, fetch its folders
+                if (savedRepo && repoSelect.value === savedRepo) {
+                    await fetchFolders(savedRepo);
+                }
+
             } catch (error) {
                 showStatus('Failed to fetch repositories', 'error');
             }
         }
+
+        // Fetch folders from selected repo
+        async function fetchFolders(repoFullName) {
+            const [owner, repo] = repoFullName.split('/');
+
+            try {
+                // Get the default branch first
+                const repoResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const repoData = await repoResponse.json();
+                const defaultBranch = repoData.default_branch || 'main';
+
+                // Fetch the tree recursively
+                const treeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!treeResponse.ok) {
+                    throw new Error('Failed to fetch repository structure');
+                }
+
+                const treeData = await treeResponse.json();
+
+                // Filter for directories only
+                folders = treeData.tree
+                    .filter(item => item.type === 'tree')
+                    .map(item => item.path)
+                    .sort();
+
+                populateFolderDropdowns();
+
+            } catch (error) {
+                console.error('Failed to fetch folders:', error);
+                // Still enable dropdowns with just custom option
+                folders = [];
+                populateFolderDropdowns();
+            }
+        }
+
+        // Populate folder dropdowns
+        function populateFolderDropdowns() {
+            const savedFolder = localStorage.getItem('gh_folder') || '';
+            const savedImageFolder = localStorage.getItem('gh_image_folder') || '';
+
+            const folderOptions = '<option value="">(root)</option>' +
+                folders.map(f => `<option value="${f}">${f}</option>`).join('') +
+                '<option value="__custom__">Custom path...</option>';
+
+            folderPathSelect.innerHTML = folderOptions;
+            imageFolderPathSelect.innerHTML = folderOptions;
+
+            folderPathSelect.disabled = false;
+            imageFolderPathSelect.disabled = false;
+
+            // Restore saved values
+            if (savedFolder) {
+                if (folders.includes(savedFolder)) {
+                    folderPathSelect.value = savedFolder;
+                } else if (savedFolder) {
+                    folderPathSelect.value = '__custom__';
+                    folderPathCustom.value = savedFolder;
+                    folderPathCustom.classList.add('show');
+                }
+            }
+
+            if (savedImageFolder) {
+                if (folders.includes(savedImageFolder)) {
+                    imageFolderPathSelect.value = savedImageFolder;
+                } else if (savedImageFolder) {
+                    imageFolderPathSelect.value = '__custom__';
+                    imageFolderPathCustom.value = savedImageFolder;
+                    imageFolderPathCustom.classList.add('show');
+                }
+            }
+        }
+
+        // Handle repo selection change
+        repoSelect.addEventListener('change', async () => {
+            if (repoSelect.value) {
+                folderPathSelect.disabled = true;
+                imageFolderPathSelect.disabled = true;
+                folderPathSelect.innerHTML = '<option value="">Loading folders...</option>';
+                imageFolderPathSelect.innerHTML = '<option value="">Loading folders...</option>';
+
+                await fetchFolders(repoSelect.value);
+            } else {
+                folders = [];
+                folderPathSelect.disabled = true;
+                imageFolderPathSelect.disabled = true;
+                folderPathSelect.innerHTML = '<option value="">Select a repository first</option>';
+                imageFolderPathSelect.innerHTML = '<option value="">Select a repository first</option>';
+            }
+        });
+
+        // Handle custom path selection
+        folderPathSelect.addEventListener('change', () => {
+            if (folderPathSelect.value === '__custom__') {
+                folderPathCustom.classList.add('show');
+                folderPathCustom.focus();
+            } else {
+                folderPathCustom.classList.remove('show');
+            }
+        });
+
+        imageFolderPathSelect.addEventListener('change', () => {
+            if (imageFolderPathSelect.value === '__custom__') {
+                imageFolderPathCustom.classList.add('show');
+                imageFolderPathCustom.focus();
+            } else {
+                imageFolderPathCustom.classList.remove('show');
+            }
+        });
 
         // Sign out
         window.signOut = function() {
@@ -1012,8 +1161,8 @@
                 const date = getDate();
                 const slug = slugify(headlineText);
                 const filename = `${date}-${slug}.md`;
-                const folder = folderPath.value.replace(/^\/|\/$/g, '');
-                const imageFolder = imageFolderPath.value.replace(/^\/|\/$/g, '');
+                const folder = getFolderPath().replace(/^\/|\/$/g, '');
+                const imageFolder = getImageFolderPath().replace(/^\/|\/$/g, '');
                 const filePath = folder ? `${folder}/${filename}` : filename;
 
                 // Build image references and upload images
